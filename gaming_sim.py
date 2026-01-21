@@ -59,6 +59,23 @@ def select_server_round_robin(task_id):
     # For now, always send to fast server 0 (we'll change this later)
     return 0
 
+# --- Calulate Jains Index ---
+def calculate_fairness(latencies: list):
+    total_sum = 0
+    squared_sum = 0
+    POW = 2
+    number_of_clients = len(latencies)
+    
+    # calculate nominator and denominator sums
+    for i in range(number_of_clients):
+        total_sum += latencies[i]
+        squared_sum += (latencies[i] ** POW)
+    
+    # finalize the calculations for nominator and denominator 
+    nominator = total_sum ** POW
+    denominator = number_of_clients * squared_sum
+    return nominator/denominator
+
 
 # ---------- Initialization ----------
 current_time = 0.0
@@ -130,16 +147,17 @@ while event_queue and current_time <= SIM_TIME:
         total_latency = current_time - task["t_created"]
         latencies.append(total_latency)
 
-
 # ---------- Results ----------
 if latencies:
     avg_lat = sum(latencies) / len(latencies)
     lat_sorted = sorted(latencies)
     p95_index = int(0.95 * len(lat_sorted)) - 1
     p95 = lat_sorted[max(0, p95_index)]
+    fairness = calculate_fairness(latencies)
 
     print(f"Tasks processed: {len(latencies)}")
     print(f"Average latency: {avg_lat * 1000:.2f} ms")
     print(f"95th percentile latency: {p95 * 1000:.2f} ms")
+    print(f"Jain's index (fairness accross clients): {fairness:.4f}")
 else:
     print("No tasks processed")
