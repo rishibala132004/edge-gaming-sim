@@ -2,19 +2,23 @@ import heapq
 import random
 
 # ---------- Configuration ----------
-SIM_TIME = 10.0          # seconds
-N_USERS = 2
-REQ_RATE = 10.0          # req/s per user (will increase later)
+SIM_TIME = 60.0          # seconds
+N_USERS = 50
+REQ_RATE = 30.0          # req/s per user (will increase later)
 FAST_CPU_MS = 7.0
 SLOW_CPU_MS = 18.0
 
-# RTTs in ms (round-trip)
-RTT = {
-    (0, 0): 15.0,  # user 0 -> server 0 (fast)
-    (0, 1): 35.0,  # user 0 -> server 1 (slow)
-    (1, 0): 20.0,  # user 1 -> server 0 (fast)
-    (1, 1): 25.0,  # user 1 -> server 1 (slow)
-}
+def get_rtt(user_id, server_id):
+    # Simulates different distances in a city 
+    # Nearest server is ~10-20ms, far ones are ~30-50ms 
+    state = random.getstate() # Saving state to not mess up main simulation randomness
+    random.seed(user_id + server_id) 
+    if user_id % 4 == server_id: 
+        val = random.uniform(10, 20) # Near
+    else:
+        val = random.uniform(30, 50) # Far 
+    random.setstate(state) # Restore state
+    return val
 
 # ---------- Event types ----------
 EV_GEN = "generate"      # user generates new request
@@ -29,10 +33,12 @@ event_counter = 0        # to break ties in heapq
 tasks = {}               # task_id -> info dict
 next_task_id = 0
 
-# Server state
+# Server state: 4 servers (2 Fast, 2 Slow) as per city topology
 servers = {
     0: {"type": "fast", "busy_until": 0.0},
     1: {"type": "slow", "busy_until": 0.0},
+    2: {"type": "fast", "busy_until": 0.0},
+    3: {"type": "slow", "busy_until": 0.0},
 }
 
 latencies = []           # list of total latency per task
@@ -55,9 +61,13 @@ def cpu_time_ms(server_id):
         return SLOW_CPU_MS
 
 
+rr_counter = 0 
+
 def select_server_round_robin(task_id):
-    # For now, always send to fast server 0 (we'll change this later)
-    return 0
+    global rr_counter
+    selected = rr_counter % 4  # Cycles through servers 0, 1, 2, and 3
+    rr_counter += 1
+    return selected
 
 # --- Calulate Jains Index ---
 def calculate_fairness(latencies: list):
@@ -79,7 +89,7 @@ def calculate_fairness(latencies: list):
 
 # ---------- Initialization ----------
 current_time = 0.0
-random.seed(1)
+#random.seed(1)
 
 # Schedule first request generation for each user
 for user_id in range(N_USERS):
@@ -104,8 +114,7 @@ while event_queue and current_time <= SIM_TIME:
         server_id = select_server_round_robin(task_id)
         tasks[task_id]["server_id"] = server_id
 
-        # Network delay: half RTT to go, half to come back later
-        rtt_ms = RTT[(user_id, server_id)]
+        rtt_ms = get_rtt(user_id, server_id)
         one_way = rtt_ms / 2.0 / 1000.0  # seconds
 
         # Schedule arrival at server
@@ -135,7 +144,7 @@ while event_queue and current_time <= SIM_TIME:
         user_id = task["user_id"]
         server_id = task["server_id"]
 
-        rtt_ms = RTT[(user_id, server_id)]
+        rtt_ms = get_rtt(user_id, server_id)
         one_way = rtt_ms / 2.0 / 1000.0
 
         # Schedule response arrival at user
